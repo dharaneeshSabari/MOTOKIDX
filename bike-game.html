@@ -1,37 +1,24 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>MOTOKIDX - Traffic Rider Pro</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>MOTOKIDX - MotoGP 3D Pro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0a0a;color:white;font-family:Arial;text-align:center;overflow:hidden}
-.top{background:#111;padding:10px;display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #ff6600}
-h1{color:#ff6600;font-size:18px}
-#scoreBox{color:#ffcc00;font-weight:bold}
-canvas{background:#2b2b2b;display:block;margin:0 auto;}
-.controls{position:absolute;bottom:10px;width:100%;display:flex;justify-content:space-between;padding:0 15px}
-.btn{width:65px;height:65px;background:rgba(255,102,0,0.8);border-radius:50%;border:2px solid white;font-size:28px;display:flex;align-items:center;justify-content:center;user-select:none}
-.bikes{display:flex;gap:8px;justify-content:center;padding:8px;background:#111}
-.bike-opt{padding:6px 12px;border:2px solid #555;border-radius:20px;cursor:pointer;font-size:12px}
-.bike-opt.active{border-color:#ff6600;background:#ff6600;color:white}
+body{background:#000;color:white;font-family:Arial;text-align:center;overflow:hidden}
+.top{background:#111;padding:8px;display:flex;justify-content:space-between;border-bottom:3px solid #ff6600}
+h1{color:#ff6600;font-size:16px} #info{color:#ffcc00;font-weight:bold;font-size:13px}
+canvas{display:block;margin:0 auto;background:linear-gradient(#2a9df4 0%, #87ceeb 35%, #2d5a27 35%, #1a3d16 100%)}
+.controls{position:absolute;bottom:15px;width:100%;display:flex;justify-content:space-between;padding:0 20px;pointer-events:none}
+.btn{width:70px;height:70px;background:rgba(255,102,0,0.9);border-radius:50%;border:3px solid white;font-size:30px;display:flex;align-items:center;justify-content:center;pointer-events:auto;user-select:none}
 </style>
 </head>
 <body>
 <div class="top">
-<h1>🏍️ MOTOKIDX PRO</h1>
-<div id="scoreBox">Score:0 | Speed:0</div>
+<h1>🏍️ MOTOKIDX MotoGP</h1>
+<div id="info">POS: 3/3 | SPEED: 0</div>
 </div>
-
-<div class="bikes">
-<div class="bike-opt active" onclick="setBike(0)">🟠 KTM 390</div>
-<div class="bike-opt" onclick="setBike(1)">🔵 R15 V4</div>
-<div class="bike-opt" onclick="setBike(2)">🟡 Duke 250</div>
-<div class="bike-opt" onclick="setBike(3)">🔴 RX100</div>
-</div>
-
-<canvas id="game" width="400" height="600"></canvas>
-
+<canvas id="game" width="400" height="650"></canvas>
 <div class="controls">
 <div class="btn" id="left">◀️</div>
 <div class="btn" id="right">▶️</div>
@@ -39,116 +26,151 @@ canvas{background:#2b2b2b;display:block;margin:0 auto;}
 
 <script>
 const c=document.getElementById('game'), ctx=c.getContext('2d');
-let W=400,H=600;
-let bike={x:175,y:500,w:50,h:80,lane:1,color:'#ff6600'};
-let cars=[], score=0, speed=5, gameOver=false, lines=[];
-let bikeTypes=[
- {color:'#ff6600',name:'KTM'},
- {color:'#0066ff',name:'R15'},
- {color:'#ffcc00',name:'DUKE'},
- {color:'#ff0000',name:'RX100'}
-];
+const W=400, H=650;
+const horizon=220;
+const lanes=5;
+let playerLane=2;
+let playerX=200, targetX=200;
+let speed=0, maxSpeed=12, distance=0;
+let opponents=[];
+let roadOffset=0;
 
-function setBike(i){
- document.querySelectorAll('.bike-opt').forEach(b=>b.classList.remove('active'));
- document.querySelectorAll('.bike-opt')[i].classList.add('active');
- bike.color=bikeTypes[i].color;
+function getRoadWidthAt(y){
+  let t=(y-horizon)/(H-horizon); // 0 at horizon, 1 at bottom
+  return 80 + t * 380; // top narrow, bottom wide
+}
+function getLaneX(lane, y){
+  let roadW=getRoadWidthAt(y);
+  let roadCenter=W/2;
+  let laneWidth=roadW/lanes;
+  let roadLeft=roadCenter-roadW/2;
+  return roadLeft + lane* laneWidth + laneWidth/2;
 }
 
-for(let i=0;i<10;i++) lines.push({y:i*70});
-
-function reset(){
- cars=[]; score=0; speed=5; gameOver=false; bike.lane=1; bike.x=175;
- loop();
+function spawnOpponents(){
+ opponents=[
+  {lane:1, y:horizon+80, color:'#ff0000', speed: 8+Math.random()*2},
+  {lane:3, y:horizon+200, color:'#0066ff', speed: 9+Math.random()*2},
+  {lane:2, y:horizon+10, color:'#ffcc00', speed: 10+Math.random()*1.5}
+ ];
 }
 
 function drawRoad(){
- ctx.fillStyle='#1e1e1e'; ctx.fillRect(0,0,W,H);
- // lanes
- ctx.strokeStyle='#444'; ctx.setLineDash([20,20]); ctx.lineWidth=2;
- ctx.beginPath(); ctx.moveTo(133,0); ctx.lineTo(133,H); ctx.moveTo(266,0); ctx.lineTo(266,H); ctx.stroke();
+ // sky already background
+ // hills
+ ctx.fillStyle='#2d5a27'; ctx.beginPath(); ctx.moveTo(0,horizon); ctx.lineTo(100,horizon-40); ctx.lineTo(180,horizon); ctx.fill();
+ ctx.beginPath(); ctx.moveTo(W, horizon); ctx.lineTo(W-120, horizon-50); ctx.lineTo(W-200,horizon); ctx.fill();
+ // crowd left
+ ctx.fillStyle='#444'; ctx.fillRect(0,horizon,30,40);
+ for(let i=0;i<20;i++){ ctx.fillStyle=i%2?'#ff0000':'#ffffff'; ctx.fillRect((i*8)%30, horizon+5+(i%4)*8, 4,4); }
+ // road
+ ctx.fillStyle='#333';
+ ctx.beginPath();
+ ctx.moveTo(W/2-40, horizon); ctx.lineTo(W/2+40, horizon); ctx.lineTo(W, H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
+ // lane lines with perspective
+ roadOffset=(roadOffset+speed)%40;
+ for(let l=1;l<lanes;l++){
+  ctx.strokeStyle='white'; ctx.lineWidth=2; ctx.setLineDash([15,15]); ctx.lineDashOffset=-roadOffset*10;
+  ctx.beginPath(); ctx.moveTo(getLaneX(l-0.5,horizon), horizon); ctx.lineTo(getLaneX(l-0.5,H), H); ctx.stroke();
+ }
  ctx.setLineDash([]);
  // side lines
- ctx.fillStyle='#ffcc00';
- lines.forEach(l=>{
-  l.y+=speed;
-  if(l.y>H) l.y=-70;
-  ctx.fillRect(10,l.y,8,30); ctx.fillRect(W-18,l.y,8,30);
- });
+ ctx.strokeStyle='#ffcc00'; ctx.lineWidth=4;
+ ctx.beginPath(); ctx.moveTo(W/2-40,horizon); ctx.lineTo(0,H); ctx.stroke();
+ ctx.beginPath(); ctx.moveTo(W/2+40,horizon); ctx.lineTo(W,H); ctx.stroke();
 }
 
-function drawBike(){
- let x=bike.x, y=bike.y;
- // shadow
- ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(x+5,y+60,40,10);
- // bike body
- ctx.fillStyle=bike.color; ctx.fillRect(x+10,y+10,30,50);
- ctx.fillStyle='#222'; ctx.fillRect(x+5,y+55,40,15); // seat
- ctx.fillStyle='#000';
- ctx.beginPath(); ctx.arc(x+15,y+75,10,0,7); ctx.arc(x+35,y+75,10,0,7); ctx.fill(); // wheels
- ctx.fillStyle='#fff'; ctx.fillRect(x+18,y+5,14,10); // headlight
- // rider helmet
- ctx.fillStyle='#ffcc00'; ctx.beginPath(); ctx.arc(x+25,y+5,10,0,7); ctx.fill();
+function drawOpponent(o){
+ let scale = (o.y - horizon)/(H - horizon);
+ if(scale<=0) return;
+ let x=getLaneX(o.lane, o.y);
+ let w=30*scale+10, h=50*scale+15;
+ // bike
+ ctx.fillStyle='rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(x, o.y+h/2, w/2, 5,0,0,7); ctx.fill();
+ ctx.fillStyle=o.color; ctx.fillRect(x-w/2, o.y-h/2, w, h*0.6);
+ ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(x, o.y+h/2, w*0.4,0,7); ctx.fill(); // tyre
+ // rider
+ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x, o.y-h/2, w*0.35,0,7); ctx.fill(); // helmet
 }
 
-function drawCar(car){
- ctx.fillStyle=car.color; ctx.fillRect(car.x,car.y,car.w,car.h);
- ctx.fillStyle='#88ccff'; ctx.fillRect(car.x+5,car.y+10,car.w-10,20); // window
- ctx.fillStyle='#111'; ctx.fillRect(car.x+3,car.y+5,8,8); ctx.fillRect(car.x+car.w-11,car.y+5,8,8);
- ctx.fillRect(car.x+3,car.y+car.h-12,8,8); ctx.fillRect(car.x+car.w-11,car.y+car.h-12,8,8);
+function drawPlayer(){
+ let y=H-90; let x=playerX; let scale=1;
+ ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(x, y+35, 45, 10,0,0,7); ctx.fill();
+ // bike back view like photo
+ ctx.fillStyle='#e0e0e0'; ctx.fillRect(x-35,y-20,70,55); // suit back
+ ctx.fillStyle='#7a3bff'; ctx.fillRect(x-30,y-15,15,40); ctx.fillRect(x+15,y-15,15,40);
+ ctx.fillStyle='#111'; ctx.fillRect(x-25,y+15,50,10);
+ ctx.fillStyle='#ff1100'; ctx.beginPath(); ctx.ellipse(x, y+20, 30, 15,0,0,7); ctx.fill(); // tail
+ ctx.fillStyle='#222'; ctx.beginPath(); ctx.arc(x, y+45, 28,0,7); ctx.fill(); // tyre big
+ ctx.fillStyle='#555'; ctx.beginPath(); ctx.arc(x, y+45, 10,0,7); ctx.fill();
+ // helmet
+ ctx.fillStyle='#0088ff'; ctx.beginPath(); ctx.arc(x, y-25, 22,0,7); ctx.fill();
+ ctx.fillStyle='#000'; ctx.fillRect(x-18,y-30,36,8);
+ // number plate
+ ctx.fillStyle='white'; ctx.strokeStyle='black'; ctx.lineWidth=2; ctx.fillRect(x-20,y+5,40,12); ctx.strokeRect(x-20,y+5,40,12);
+ ctx.fillStyle='red'; ctx.font='bold 10px Arial'; ctx.fillText('MOTOKIDX', x-18, y+13);
 }
 
 function loop(){
- if(gameOver) return;
+ ctx.clearRect(0,0,W,H);
  drawRoad();
 
- // move bike to lane smoothly
- let targetX=[50,175,300][bike.lane];
- bike.x += (targetX - bike.x)*0.2;
+ // move player smoothly
+ playerX+=(targetX-playerX)*0.15;
 
- drawBike();
+ // speed control - auto accelerate
+ if(speed<maxSpeed) speed+=0.04;
+ distance+=speed;
+ maxSpeed=12+distance*0.0001;
 
- // spawn cars
- if(Math.random()<0.025+speed*0.002){
-  let lane=Math.floor(Math.random()*3);
-  let colors=['#ff0000','#00ff00','#0088ff','#ffffff','#ff00ff'];
-  cars.push({x:[50,175,300][lane], y:-100, w:50, h:85, color:colors[Math.floor(Math.random()*colors.length)], lane:lane});
- }
-
- for(let i=cars.length-1;i>=0;i--){
-  let car=cars[i];
-  car.y+=speed;
-  drawCar(car);
-  // collision
-  if(bike.x < car.x+car.w-5 && bike.x+bike.w > car.x+5 && bike.y < car.y+car.h-10 && bike.y+bike.h > car.y+10){
-   gameOver=true;
-   setTimeout(()=>{alert('CRASH DA! 💥 Score: '+Math.floor(score)+'\nSpeed: '+speed.toFixed(1)+' km/h'); reset();},100);
-   return;
+ // opponents logic - they come towards us if we are faster they go back
+ opponents.forEach(o=>{
+  o.y+= (speed - o.speed)*2 + 2; // if we faster, they go down (we overtake)
+  if(o.y>H+100){ // overtaken
+   o.y=horizon+Math.random()*50;
+   o.lane=Math.floor(Math.random()*5);
+   o.speed=7+Math.random()*4+speed*0.3;
   }
-  if(car.y>H) {cars.splice(i,1); score+=10;}
- }
+  if(o.y<horizon){ o.y=horizon+5; }
+  drawOpponent(o);
+ });
 
- score+=speed*0.1;
- speed+=0.003; // gradually tough
- if(speed>15) speed=15;
- document.getElementById('scoreBox').innerText=`Score:${Math.floor(score)} | Speed:${(speed*18).toFixed(0)} km/h`;
+ drawPlayer();
+
+ // collision - same lane and close
+ opponents.forEach(o=>{
+  if(o.lane===playerLane && o.y>H-130 && o.y<H-40){
+   // crash
+   speed*=0.5;
+   ctx.fillStyle='rgba(255,0,0,0.5)'; ctx.fillRect(0,0,W,H);
+  }
+ });
+
+ // position calc
+ let pos=1;
+ opponents.forEach(o=>{ if(o.y>H-100) pos++; else if(o.y>H-200 && o.lane===playerLane) pos++; });
+ let total=opponents.length+1;
+ document.getElementById('info').innerText=`POS: ${pos}/${total} | SPEED: ${(speed*22).toFixed(0)} | KM: ${(distance*0.02).toFixed(1)}`;
 
  requestAnimationFrame(loop);
 }
 
-// controls
-function goLeft(){if(bike.lane>0) bike.lane--;}
-function goRight(){if(bike.lane<2) bike.lane++;}
-document.getElementById('left').addEventListener('touchstart',e=>{e.preventDefault();goLeft()});
-document.getElementById('right').addEventListener('touchstart',e=>{e.preventDefault();goRight()});
-document.getElementById('left').addEventListener('click',goLeft);
-document.getElementById('right').addEventListener('click',goRight);
+function changeLane(dir){
+ playerLane+=dir;
+ if(playerLane<0) playerLane=0;
+ if(playerLane>=lanes) playerLane=lanes-1;
+ targetX=getLaneX(playerLane, H-90);
+}
+
+document.getElementById('left').addEventListener('touchstart',e=>{e.preventDefault();changeLane(-1)});
+document.getElementById('right').addEventListener('touchstart',e=>{e.preventDefault();changeLane(1)});
 document.addEventListener('keydown',e=>{
- if(e.key=='ArrowLeft'||e.key=='a') goLeft();
- if(e.key=='ArrowRight'||e.key=='d') goRight();
+ if(e.key==='ArrowLeft'||e.key==='a') changeLane(-1);
+ if(e.key==='ArrowRight'||e.key==='d') changeLane(1);
 });
 
-reset();
+spawnOpponents();
+loop();
 </script>
 </body>
 </html>
